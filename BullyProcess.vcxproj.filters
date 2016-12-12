@@ -24,12 +24,33 @@
     <ClInclude Include="targetver.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Process.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="messege.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ipcmanager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="elepsedtimer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="BullyProcess.cpp">
+    <ClCompile Include="Process.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ipcmanager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="messege.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
