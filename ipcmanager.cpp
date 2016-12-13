@@ -1,7 +1,8 @@
 #include "ipcmanager.h"
 #include "timeHelper.h"
 using namespace std;
-IPCManager *IPCManager::instance(){
+IPCManager *IPCManager::instance()
+{
     if(m_instance)
         return m_instance;
     m_instance = new IPCManager();
@@ -15,7 +16,8 @@ IPCManager::~IPCManager()
     WSACleanup();
 }
 
-IPCManager::IPCManager()
+IPCManager::IPCManager() :
+    m_connectedToServer(false)
 {
 	// initiates use of the Winsock DLL
 	if (WSAStartup(MAKEWORD(2, 2), &m_wsaData) != 0) {
@@ -26,7 +28,7 @@ IPCManager::IPCManager()
     // initialize broadcast address
     m_broadcastAddress.sin_family = AF_INET;
     m_broadcastAddress.sin_addr.s_addr = INADDR_BROADCAST;
-    m_broadcastAddress.sin_port = htons( (unsigned short) PORT );
+    m_broadcastAddress.sin_port = htons( (unsigned short) UDP_PORT );
 
     // create broadcast socket
     if((m_broadcastSocket = socket(AF_INET , SOCK_DGRAM , IPPROTO_UDP )) == INVALID_SOCKET)
@@ -56,7 +58,7 @@ IPCManager::IPCManager()
     // set recieve address
     sockaddr_in RecvAddr;
     RecvAddr.sin_family = AF_INET;
-    RecvAddr.sin_port = htons(PORT);
+    RecvAddr.sin_port = htons(UDP_PORT);
     RecvAddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     // bind recieve address with recieve socket
@@ -68,7 +70,7 @@ IPCManager::IPCManager()
 
 void IPCManager::broadcastMessage(Messege &messege)
 {
-    cout << Time::timeStamp() <<  " ,Broadcasting message: " << messege.msgString() << endl;
+    cout << Time::timeStamp() <<  ": Broadcasting message: " << messege.msgString() << endl;
 	string msg = messege.msgString();
     if (sendto(m_broadcastSocket, msg.c_str(), msg.length(), 0, 
 		(struct sockaddr*) &m_broadcastAddress, sizeof(m_broadcastAddress)) == SOCKET_ERROR)
@@ -84,14 +86,14 @@ bool IPCManager::readBroadcastMessage(Messege &msg, int timeout)
     int res = 0;
     char RecvBuf[MSG_MAX_SIZE];
     memset(RecvBuf, 0, MSG_MAX_SIZE);
-    int SenderAddrSize = sizeof (msg.senderAddress);
+    int dataSize = 0;
 
     // set timeout
     if(setsockopt(m_receiveSocket, SOL_SOCKET, SO_RCVTIMEO,(char*)&timeout,sizeof(timeout)))
         cout << "could not set socket option!" <<endl;
 
     res = recvfrom(m_receiveSocket, RecvBuf, MSG_MAX_SIZE, 0,
-                   (SOCKADDR *) & msg.senderAddress, &SenderAddrSize);
+                   (SOCKADDR *) & msg.senderAddress, &dataSize);
     if(WSAGetLastError() == WSAETIMEDOUT){
         return false;
     }
@@ -99,7 +101,27 @@ bool IPCManager::readBroadcastMessage(Messege &msg, int timeout)
         wprintf(L"recvfrom failed with error %d\n", WSAGetLastError());
         exit(EXIT_FAILURE);
     }
-    msg.fillMessege(RecvBuf);
+    msg.fillMessege(RecvBuf, dataSize);
     return true;
+}
+
+bool IPCManager::connectToServer(sockaddr_in serverAddress)
+{
+    return false;
+}
+
+void IPCManager::disconnectServer()
+{
+
+}
+
+bool IPCManager::requestSubTask(Messege &task)
+{
+    return false;
+}
+
+bool IPCManager::recieveRequest()
+{
+    return false;
 }
 IPCManager* IPCManager::m_instance = NULL;

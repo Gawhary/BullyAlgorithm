@@ -1,6 +1,7 @@
 #include "Process.h"
-
 #include "timeHelper.h"
+
+#include <algorithm>
 
 using namespace std;
 
@@ -36,11 +37,11 @@ Process::~Process()
 }
 bool Process::electMe()
 {
-    cout << "Initiating Election..." << endl;;
-    while(true){
+    cout << "Initiating Election..." << endl;
         // Broadcast election message
         Messege msg(Messege::Election, m_processId);
         m_ipcManager->broadcastMessage(msg);
+    while(true){
         // wait for responce or timeout
 		bool somethingReceived;
 		do {
@@ -61,45 +62,65 @@ void Process::beSlave()
 {
     cout << "Slave mode started." << endl;
     Time timer;
+    Messege msg;
     while(timer.elepsedMiliSec() < COORDINATOR_TIMEOUT){
         // wait for coordinator message
-        Messege msg;
         bool gotSomething = m_ipcManager->readBroadcastMessage(msg, COORDINATOR_TIMEOUT);
         if(!gotSomething)
             break;
         if(msg.messegeType == Messege::Coordinator){
-            // ToDo: check message sender
+            // check message sender
+			if (msg.senderId < m_processId)
+                return;// initiate a new Election
+            doSubTask(msg);
             timer.reset();
         }
-        // ToDo:
-        //if(msg.messegeType == Messege::Election)
-            //if(msg.senderAddress > m_processNumber)
-                // add new process to higher list and connect
     }
-	cout << "Coordinator lost." << endl;;
+    cout << "Coordinator lost." << endl;
 }
-void Process::doSubTask(){
-    // ToDo: get sub-task from coordinator, do it and return the result
+
+void Process::doSubTask(Messege &coordinatorMsg){
+    // connects iff not connected
+    m_ipcManager->connectToServer(coordinatorMsg.senderAddress);
+    if(m_ipcManager->serverConnected()){
+        Messege task;
+        bool gotTask = m_ipcManager->requestSubTask(task);
+        if(gotTask){
+            // do the task
+            int minValue = INT_MAX;
+            int* values = (int*)task.messegeData;
+            for(int i = 0; i < task.messegeDataSize; i+= sizeof(int) )
+                if(values[i] < minValue)
+                    minValue = values[i];
+            // return the result
+            Messege resultMsg(Messege::TaskResult, m_processId, (void*)minValue, sizeof(minValue));
+            m_ipcManager->sendToServer(resultMsg);
+        }
+    }
 }
 
 void Process::beCoordinator()
 {
 	cout << "Coordinator mode started." << endl;
     // ToDo: clear higher process list and connections
-    HANDLE    thread;
-    bool *keepSending = new bool(true);
+    HANDLE    sendingThread;
+    bool *keepAlive = new bool(true);
     // start broadcasting coordinator message
-    thread = CreateThread(NULL, 0, Process::keepSendingCoordinatorMessage
-                          , (void*) keepSending, 0, 0);
+    sendingThread = CreateThread(NULL, 0, Process::keepSendingCoordinatorMessage
+                          , (void*) keepAlive, 0, 0);
+    distributingThread = CreateThread(NULL, 0, Process::keepdistributingTasks
+                          , (void*) keepAlive, 0, 0);
     while(true){
         if(checkforBully())
             break;
-        startNewTask();
     }
-    // stop broadcasting coordinator message
-    *keepSending = false;
-    WaitForSingleObject(thread, INFINITE);
-    CloseHandle(thread);
+    // stop broadcasting coordinator message and stop distributing tasks discard current task
+    *keepAlive = false;
+    WaitForSingleObject(sendingThread, INFINITE);
+    CloseHandle(sendingThread);
+    WaitForSingleObject(distributingThread, INFINITE);
+    CloseHandle(distributingThread);
+    delete keepAlive;
 }
 
 
@@ -124,26 +145,59 @@ bool Process::checkforBully()
     }
 }
 
-void Process::startNewTask()
+DWORD WINAPI Process::keepdistributingTasks(void* param)
 {
-    // ToDo: implement
+    bool* keepAlive = (bool*)param;
+    bool taskAccomplished ;
+    int numberOfSubTasks = (TASK_ARRAY_SIZE / SUB_TASK_SIZE);
+    int array[TASK_ARRAY_SIZE];
+    Messege request;
+    while(*keepAlive){
+        // Create new task
+        for(int i = array.begin(); i < TASK_ARRAY_SIZE; it++)
+            array[i] = rand();
+        taskAccomplished = false;
+        int nextStart = array.begin();
+        int accomplishedSubtasks = 0;
+        while(*keepAlive && !taskAccomplished){
+            // wait for client request
+            IPCManager::instance()->recieveRequest(request);
+            // when get task request
+            if(request.messegeType == Messege.TaskRequest){
+                // if still have sub-tasks
+                if(nextStart < TASK_ARRAY_SIZE){
+                // send next subtask
+                    Messege taskMsg(Messege::Task, processID(),array[nextStart], SUB_TASK_SIZE );
+                    // ToDo: send task
+                }
+                nextStart += SUB_TASK_SIZE;
+            }
+            // when get task result
+            else if(request.messegeType == Messege.TaskResult){
+                // update result
+                ++ accomplishedSubtasks;
+            }
+            taskAccomplished = numberOfSubTasks == accomplishedSubtasks;
+        }
+    }
+    return 0;
 }
 
 DWORD WINAPI Process::keepSendingCoordinatorMessage(void *param)
 {
     bool *keepSending = (bool*)param;
     while(*keepSending){
-        Messege msg(Messege::Coordinator, Process::processNumber());
+        Messege msg(Messege::Coordinator, Process::processID());
         IPCManager::instance()->broadcastMessage(msg);
 		Sleep(COORDINATOR_MSG_INTERVAL);
     }
     return 0;
 }
 
-void Process::handleSubTask(vector<int>::iterator start,
+DWORD WINAPI Process::sendSubTask(vector<int>::iterator start,
                             vector<int>::iterator end)
 {
-
+    return 0;
 }
 
 Process* Process::m_instance = NULL;
