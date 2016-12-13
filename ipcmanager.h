@@ -24,6 +24,8 @@ public:
 private:
     IPCManager(); // private default constructo (for singleton)
 
+
+	WSADATA m_wsaData;
     SOCKET m_broadcastSocket;
     SOCKET m_receiveSocket;
     sockaddr_in m_broadcastAddress;

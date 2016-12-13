@@ -32,10 +32,10 @@ private:
     static void handleSubTask(std::vector<int>::iterator start,
                               std::vector<int>::iterator end);
     static int processNumber(){
-        return Process::getInstance()->m_processNumber;
+        return Process::getInstance()->m_processId;
     }
 
-    int m_processNumber;
+    int m_processId;
     IPCManager *m_ipcManager;
     static Process *m_instance;
 

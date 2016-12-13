@@ -8,8 +8,9 @@
 #define MSG_STR_ALIVE       "ALIVE"
 #define MSG_STR_UNKNOWN     "UNKNOWN"
 
-#define ELECTION_TIMEOUT    100
-#define COORDINATOR_TIMEOUT 1000
+#define ELECTION_TIMEOUT    1000
+#define COORDINATOR_TIMEOUT 3000
+#define COORDINATOR_MSG_INTERVAL 1000 
 
 class Messege
 {
@@ -29,7 +30,6 @@ public:
     Messege(){}
     // Constructs Messege by type, sender id, timeout and data
     Messege(MessegeType type, int pid, std::string data = std::string());
-    void print();
     // composes message string
     std::string msgString();
     // converts Messege type into string

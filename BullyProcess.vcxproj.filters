@@ -33,7 +33,7 @@
     <ClInclude Include="ipcmanager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="elepsedtimer.h">
+    <ClInclude Include="timeHelper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

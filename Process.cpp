@@ -1,6 +1,6 @@
 #include "Process.h"
 
-#include "elepsedtimer.h"
+#include "timeHelper.h"
 
 using namespace std;
 
@@ -13,7 +13,7 @@ Process *Process::getInstance(int processNumber){
 
 void Process::start()
 {
-    cout << "Starting process: " << m_processNumber << endl;
+    cout << "Starting process: " << m_processId << endl;
     while(true){
         if(electMe()) // returns true if no higher processes
             beCoordinator(); // will return when higher process joins
@@ -25,9 +25,9 @@ Process::Process(int processNumber)
 {
     if(processNumber == 0)
         // use process ID;
-        m_processNumber = (int) GetCurrentProcessId();
+        m_processId = (int) GetCurrentProcessId();
     else
-        m_processNumber = processNumber;
+        m_processId = processNumber;
     m_ipcManager = IPCManager::instance();
 }
 
@@ -39,15 +39,18 @@ bool Process::electMe()
     cout << "Initiating Election..." << endl;;
     while(true){
         // Broadcast election message
-        Messege msg(Messege::Election, m_processNumber);
+        Messege msg(Messege::Election, m_processId);
         m_ipcManager->broadcastMessage(msg);
         // wait for responce or timeout
-        bool somethingReceived = m_ipcManager->readBroadcastMessage(msg, ELECTION_TIMEOUT);
-        if(!somethingReceived)
-            return true;
+		bool somethingReceived;
+		do {
+			somethingReceived = m_ipcManager->readBroadcastMessage(msg, ELECTION_TIMEOUT);
+			if (!somethingReceived)
+				return true;
+		} while (msg.senderId == m_processId); // skip message broadcasted by me
         if((msg.messegeType == Messege::Coordinator ||
             msg.messegeType == Messege::Election)
-                && msg.senderId > m_processNumber){
+                && msg.senderId > m_processId){
             // toDo: save new higher process and create connection
             return false;
         }
@@ -57,7 +60,7 @@ bool Process::electMe()
 void Process::beSlave()
 {
     cout << "Slave mode started." << endl;
-    ElepsedTimer timer;
+    Time timer;
     while(timer.elepsedMiliSec() < COORDINATOR_TIMEOUT){
         // wait for coordinator message
         Messege msg;
@@ -84,17 +87,17 @@ void Process::beCoordinator()
 	cout << "Coordinator mode started." << endl;
     // ToDo: clear higher process list and connections
     HANDLE    thread;
-    bool keepSending = true;
+    bool *keepSending = new bool(true);
+    // start broadcasting coordinator message
+    thread = CreateThread(NULL, 0, Process::keepSendingCoordinatorMessage
+                          , (void*) keepSending, 0, 0);
     while(true){
-        // start broadcasting coordinator message
-        thread = CreateThread(NULL, 0, Process::keepSendingCoordinatorMessage
-                              , (void*) &keepSending, 0, 0);
         if(checkforBully())
             break;
         startNewTask();
     }
     // stop broadcasting coordinator message
-    keepSending = false;
+    *keepSending = false;
     WaitForSingleObject(thread, INFINITE);
     CloseHandle(thread);
 }
@@ -109,13 +112,13 @@ bool Process::checkforBully()
         if(!somethingReceived) //timeout
             return false;
         if(msg.messegeType == Messege::Election){
-            if( msg.senderId > m_processNumber){
+            if( msg.senderId > m_processId){
                 // toDo: save new higher process and create connection
                 return true;
             }
             else{
                 // ToDo: send alive message only to the sender
-                m_ipcManager->broadcastMessage(Messege(Messege::Alive,m_processNumber));
+                m_ipcManager->broadcastMessage(Messege(Messege::Alive,m_processId));
             }
         }
     }
@@ -128,10 +131,11 @@ void Process::startNewTask()
 
 DWORD WINAPI Process::keepSendingCoordinatorMessage(void *param)
 {
-    bool &keepSending = (bool&)param;
-    while(keepSending){
+    bool *keepSending = (bool*)param;
+    while(*keepSending){
         Messege msg(Messege::Coordinator, Process::processNumber());
         IPCManager::instance()->broadcastMessage(msg);
+		Sleep(COORDINATOR_MSG_INTERVAL);
     }
     return 0;
 }

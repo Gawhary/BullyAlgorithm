@@ -1,4 +1,5 @@
 #include "ipcmanager.h"
+#include "timeHelper.h"
 using namespace std;
 IPCManager *IPCManager::instance(){
     if(m_instance)
@@ -16,6 +17,12 @@ IPCManager::~IPCManager()
 
 IPCManager::IPCManager()
 {
+	// initiates use of the Winsock DLL
+	if (WSAStartup(MAKEWORD(2, 2), &m_wsaData) != 0) {
+		printf("WSAStartup failed: %d\n", WSAGetLastError());
+		exit(EXIT_FAILURE);
+	}
+
     // initialize broadcast address
     m_broadcastAddress.sin_family = AF_INET;
     m_broadcastAddress.sin_addr.s_addr = INADDR_BROADCAST;
@@ -61,8 +68,7 @@ IPCManager::IPCManager()
 
 void IPCManager::broadcastMessage(Messege &messege)
 {
-    cout << "Broadcasting message: ";
-    messege.print();
+    cout << Time::timeStamp() <<  " ,Broadcasting message: " << messege.msgString() << endl;
 	string msg = messege.msgString();
     if (sendto(m_broadcastSocket, msg.c_str(), msg.length(), 0, 
 		(struct sockaddr*) &m_broadcastAddress, sizeof(m_broadcastAddress)) == SOCKET_ERROR)
@@ -93,7 +99,6 @@ bool IPCManager::readBroadcastMessage(Messege &msg, int timeout)
         wprintf(L"recvfrom failed with error %d\n", WSAGetLastError());
         exit(EXIT_FAILURE);
     }
-	cout << "Broadcast messege received: " << RecvBuf << endl;
     msg.fillMessege(RecvBuf);
     return true;
 }

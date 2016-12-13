@@ -10,7 +10,7 @@ INCLUDEPATH += .
 HEADERS += Process.h stdafx.h targetver.h \
     ipcmanager.h \
     messege.h \
-    elepsedtimer.h
+    timeHelper.h
 SOURCES += Process.cpp \
     stdafx.cpp \
     main.cpp \

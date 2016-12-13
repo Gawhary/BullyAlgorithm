@@ -1,6 +1,7 @@
 #include "messege.h"
+#include "timeHelper.h"
+
 #include <sstream>
-#include <time.h> 
 using namespace std;
 
 
@@ -22,13 +23,6 @@ Messege::Messege(Messege::MessegeType type, int pid, string data)
     messegeData = data;
 }
 
-void Messege::print(){
-    time_t currentTime;
-    time(&currentTime);
-    char timeStr[MSG_MAX_SIZE];
-    ctime_s(timeStr, MSG_MAX_SIZE, &currentTime);
-    cout << timeStr << "\t" << msgString() << endl;
-}
 
 std::string Messege::msgString(){
     string strType = typeString();
