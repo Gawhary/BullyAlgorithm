@@ -120,8 +120,19 @@ bool IPCManager::requestSubTask(Messege &task)
     return false;
 }
 
-bool IPCManager::recieveRequest()
+bool IPCManager::recieveRequest(Messege &request, int timeout)
 {
     return false;
 }
+
+bool IPCManager::respondToRequest(Messege response)
+{
+    return false;
+}
+
+bool IPCManager::sendToServer(Messege msg)
+{
+    return false;
+}
+
 IPCManager* IPCManager::m_instance = NULL;

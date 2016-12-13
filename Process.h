@@ -28,7 +28,7 @@ private:
     bool checkforBully(); // check if higher process has initiated election
 
     // start task distributing in a new thread
-    static DWORD WINAPI keepdistributingTasks(void* param);
+    static DWORD WINAPI taskDistributionTread(void* param);
     // start new thread to broadcast coordinator message continuesly
     static  DWORD WINAPI keepSendingCoordinatorMessage(void *param);
     // get sub-task from coordinator, do it and return the result

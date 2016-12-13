@@ -103,12 +103,12 @@ void Process::beCoordinator()
 {
 	cout << "Coordinator mode started." << endl;
     // ToDo: clear higher process list and connections
-    HANDLE    sendingThread;
+    HANDLE    sendingThread, distributingThread;
     bool *keepAlive = new bool(true);
     // start broadcasting coordinator message
     sendingThread = CreateThread(NULL, 0, Process::keepSendingCoordinatorMessage
                           , (void*) keepAlive, 0, 0);
-    distributingThread = CreateThread(NULL, 0, Process::keepdistributingTasks
+    distributingThread = CreateThread(NULL, 0, Process::taskDistributionTread
                           , (void*) keepAlive, 0, 0);
     while(true){
         if(checkforBully())
@@ -145,7 +145,7 @@ bool Process::checkforBully()
     }
 }
 
-DWORD WINAPI Process::keepdistributingTasks(void* param)
+DWORD WINAPI Process::taskDistributionTread(void* param)
 {
     bool* keepAlive = (bool*)param;
     bool taskAccomplished ;
@@ -154,26 +154,26 @@ DWORD WINAPI Process::keepdistributingTasks(void* param)
     Messege request;
     while(*keepAlive){
         // Create new task
-        for(int i = array.begin(); i < TASK_ARRAY_SIZE; it++)
+        for(int i = 0; i < TASK_ARRAY_SIZE; i++)
             array[i] = rand();
         taskAccomplished = false;
-        int nextStart = array.begin();
+        int nextStart = 0;
         int accomplishedSubtasks = 0;
         while(*keepAlive && !taskAccomplished){
             // wait for client request
             IPCManager::instance()->recieveRequest(request);
             // when get task request
-            if(request.messegeType == Messege.TaskRequest){
+            if(request.messegeType == Messege::TaskRequest){
                 // if still have sub-tasks
                 if(nextStart < TASK_ARRAY_SIZE){
                 // send next subtask
-                    Messege taskMsg(Messege::Task, processID(),array[nextStart], SUB_TASK_SIZE );
+                    Messege taskMsg(Messege::Task, processID(),(void*)array[nextStart], SUB_TASK_SIZE );
                     // ToDo: send task
                 }
                 nextStart += SUB_TASK_SIZE;
             }
             // when get task result
-            else if(request.messegeType == Messege.TaskResult){
+            else if(request.messegeType == Messege::TaskResult){
                 // update result
                 ++ accomplishedSubtasks;
             }

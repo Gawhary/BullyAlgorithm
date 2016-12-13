@@ -26,6 +26,7 @@ public:
     void disconnectServer(); // called by worker before exit slave mode
     bool requestSubTask(Messege &task); // send work request to the coordinator and wait for response
     bool recieveRequest(Messege &request, int timeout = 0); // receive messeges from slave process
+    bool respondToRequest(Messege response); // takes the socket from response and send back it's content
     bool serverConnected(){
         return m_connectedToServer;
     }
