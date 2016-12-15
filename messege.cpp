@@ -30,7 +30,7 @@ bool Messege::fillMessege(char* buffer, int size){
     }
     else if (dataSize > 0){ // data can fit in pointer itself
         m_userData = 0;
-        memcpy(&m_userData, data, dataSize);
+        memcpy(&m_userData, &data, dataSize);
     }
     return true;
 }
@@ -52,7 +52,7 @@ Messege::Messege(Messege::MessegeType type, int pid, void *data, int dataSize)
     }
     else if (dataSize > 0){ // data can fit in messegeData itself
         m_userData = 0;
-        memcpy(&m_userData, data, dataSize);
+        memcpy(&m_userData, &data, dataSize);
     }
 }
 
@@ -70,7 +70,10 @@ vector<char> Messege::msgContent()
     int size = str.size() + 1 + m_userDataSize;// adding 1 for null terminated string
     vector<char> content(size);
     memcpy(content.data(), str.c_str(), str.size()+1);
-    memcpy(content.data()+str.size() + 1, m_userData, m_userDataSize);
+	if (m_userDataSize > sizeof(m_userData))
+		memcpy(content.data()+str.size() + 1, m_userData, m_userDataSize);
+	else
+		memcpy(content.data() + str.size() + 1, &m_userData, m_userDataSize);
     return content;
 }
 
@@ -101,6 +104,6 @@ void Messege::parseType(std::string strType){
     else if (0 == _strcmpi(strType.c_str(),MSG_STR_TASK_REQUEST))messegeType = TaskRequest;
     else if (0 == _strcmpi(strType.c_str(),MSG_STR_TASK))        messegeType = Task;
     else if (0 == _strcmpi(strType.c_str(),MSG_STR_TASK_RESULT)) messegeType = TaskResult;
-    else                                                        messegeType = Unknown;
+    else                                                         messegeType = Unknown;
 }
 

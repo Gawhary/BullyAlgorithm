@@ -111,11 +111,11 @@ void BullyProcess::beCoordinator()
     // ToDo: clear higher process list and connections
     HANDLE    sendingThread, distributingThread;
     bool *keepAlive = new bool(true);
-    m_ipcManager->server_initTcpServer(); // start listening for work requests
+    m_ipcManager->server_startTcpServer(); // start listening for work requests
     // start broadcasting coordinator message
-    sendingThread = CreateThread(NULL, 0, BullyProcess::keepSendingCoordinatorMessage
-                          , (void*) keepAlive, 0, 0);
     distributingThread = CreateThread(NULL, 0, BullyProcess::taskDistributionTread
+                          , (void*) keepAlive, 0, 0);
+    sendingThread = CreateThread(NULL, 0, BullyProcess::keepSendingCoordinatorMessage
                           , (void*) keepAlive, 0, 0);
     while(true){
         if(gotBully()) // check if some higher process initiated an Election
@@ -144,7 +144,8 @@ bool BullyProcess::gotBully()
         bool somethingReceived = m_ipcManager->readBroadcastMessage(msg, ELECTION_TIMEOUT);
         if(!somethingReceived) //timeout
             return false;
-        if(msg.messegeType == Messege::Election){
+        if(msg.messegeType == Messege::Election ||
+			msg.messegeType == Messege::Coordinator){
             if( msg.senderId > m_processId){
                 // toDo: save new higher process and create a connection
                 return true;
