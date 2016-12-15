@@ -145,18 +145,19 @@
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="BullyProcess.h" />
+    <ClInclude Include="configurations.h" />
     <ClInclude Include="ipcmanager.h" />
     <ClInclude Include="messege.h" />
-    <ClInclude Include="Process.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="timeHelper.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="BullyProcess.cpp" />
     <ClCompile Include="ipcmanager.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="messege.cpp" />
-    <ClCompile Include="Process.cpp" />
     <ClCompile Include="stdafx.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

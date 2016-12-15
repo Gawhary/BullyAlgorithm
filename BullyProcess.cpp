@@ -1,41 +1,41 @@
-#include "Process.h"
+#include "BullyProcess.h"
 #include "timeHelper.h"
 
 #include <algorithm>
 
 using namespace std;
 
-Process *Process::getInstance(int processNumber){
+BullyProcess *BullyProcess::getInstance(int processNumber){
     if(m_instance)
         return m_instance;
-    m_instance = new Process(processNumber);
+    m_instance = new BullyProcess(processNumber);
     return m_instance;
 }
 
-void Process::start()
+void BullyProcess::start()
 {
     cout << "Starting process: " << m_processId << endl;
     while(true){
         if(electMe()) // returns true if no higher processes
             beCoordinator(); // will return when higher process joins
-        beSlave(); // will return when coordinator dies
+        beWorker(); // will return when coordinator dies
     }
 }
 
-Process::Process(int processNumber)
+BullyProcess::BullyProcess(int processNumber)
 {
     if(processNumber == 0)
-        // use process ID;
+        // use system's process ID;
         m_processId = (int) GetCurrentProcessId();
     else
         m_processId = processNumber;
     m_ipcManager = IPCManager::instance();
 }
 
-Process::~Process()
+BullyProcess::~BullyProcess()
 {
 }
-bool Process::electMe()
+bool BullyProcess::electMe()
 {
     cout << "Initiating Election..." << endl;
         // Broadcast election message
@@ -58,7 +58,7 @@ bool Process::electMe()
     }
 }
 
-void Process::beSlave()
+void BullyProcess::beWorker()
 {
     cout << "Slave mode started." << endl;
     Time timer;
@@ -77,54 +77,66 @@ void Process::beSlave()
         }
     }
     cout << "Coordinator lost." << endl;
+    m_ipcManager->client_disconnectServer();
 }
 
-void Process::doSubTask(Messege &coordinatorMsg){
-    // connects iff not connected
-    m_ipcManager->connectToServer(coordinatorMsg.senderAddress);
-    if(m_ipcManager->serverConnected()){
-        Messege task;
-        bool gotTask = m_ipcManager->requestSubTask(task);
+void BullyProcess::doSubTask(Messege &coordinatorMsg){
+    // connect iff not connected
+    if(m_ipcManager->client_connectToServer(coordinatorMsg)){
+        Messege task(Messege::TaskRequest);
+        bool gotTask = m_ipcManager->client_sendRequest(task, true, SERVER_TIMEOUT);
         if(gotTask){
+            cout << Time::timeStamp() << ": Task recieved." << endl;
             // do the task
             int minValue = INT_MAX;
-            int* values = (int*)task.messegeData;
-            for(int i = 0; i < task.messegeDataSize; i+= sizeof(int) )
+            int* values = (int*)task.userData();
+            for(int i = 0; i < task.userDataSize(); i+= sizeof(int) )
                 if(values[i] < minValue)
                     minValue = values[i];
             // return the result
+            cout << Time::timeStamp() << ": Sending result:" << minValue << endl;
             Messege resultMsg(Messege::TaskResult, m_processId, (void*)minValue, sizeof(minValue));
-            m_ipcManager->sendToServer(resultMsg);
+            m_ipcManager->client_sendRequest(resultMsg);
         }
     }
 }
 
-void Process::beCoordinator()
+int BullyProcess::processID(){
+    return BullyProcess::getInstance()->m_processId;
+}
+
+void BullyProcess::beCoordinator()
 {
-	cout << "Coordinator mode started." << endl;
+    cout << "Coordinator mode started." << endl;
     // ToDo: clear higher process list and connections
     HANDLE    sendingThread, distributingThread;
     bool *keepAlive = new bool(true);
+    m_ipcManager->server_initTcpServer(); // start listening for work requests
     // start broadcasting coordinator message
-    sendingThread = CreateThread(NULL, 0, Process::keepSendingCoordinatorMessage
+    sendingThread = CreateThread(NULL, 0, BullyProcess::keepSendingCoordinatorMessage
                           , (void*) keepAlive, 0, 0);
-    distributingThread = CreateThread(NULL, 0, Process::taskDistributionTread
+    distributingThread = CreateThread(NULL, 0, BullyProcess::taskDistributionTread
                           , (void*) keepAlive, 0, 0);
     while(true){
-        if(checkforBully())
+        if(gotBully()) // check if some higher process initiated an Election
             break;
     }
-    // stop broadcasting coordinator message and stop distributing tasks discard current task
-    *keepAlive = false;
+    // stop broadcasting coordinator message and
+    // stop distributing tasks (discard current task)
+    *keepAlive = false; // inform threads to stop
+    // wait for threads to exit
     WaitForSingleObject(sendingThread, INFINITE);
-    CloseHandle(sendingThread);
     WaitForSingleObject(distributingThread, INFINITE);
+    // clean up
+    CloseHandle(sendingThread);
     CloseHandle(distributingThread);
+    // stop listening to worker requests
+    m_ipcManager->server_closeTcpServer();
     delete keepAlive;
 }
 
 
-bool Process::checkforBully()
+bool BullyProcess::gotBully()
 {
     while(true){
         // wait for election message, don't wait for long
@@ -134,7 +146,7 @@ bool Process::checkforBully()
             return false;
         if(msg.messegeType == Messege::Election){
             if( msg.senderId > m_processId){
-                // toDo: save new higher process and create connection
+                // toDo: save new higher process and create a connection
                 return true;
             }
             else{
@@ -145,7 +157,7 @@ bool Process::checkforBully()
     }
 }
 
-DWORD WINAPI Process::taskDistributionTread(void* param)
+DWORD WINAPI BullyProcess::taskDistributionTread(void* param)
 {
     bool* keepAlive = (bool*)param;
     bool taskAccomplished ;
@@ -154,50 +166,56 @@ DWORD WINAPI Process::taskDistributionTread(void* param)
     Messege request;
     while(*keepAlive){
         // Create new task
+        cout << Time::timeStamp() << ": Creating new task..." << endl;
+        int minimumValue = INT_MAX;
         for(int i = 0; i < TASK_ARRAY_SIZE; i++)
             array[i] = rand();
         taskAccomplished = false;
         int nextStart = 0;
         int accomplishedSubtasks = 0;
         while(*keepAlive && !taskAccomplished){
-            // wait for client request
-            IPCManager::instance()->recieveRequest(request);
+            // wait for worker request
+            if(!IPCManager::instance()->server_receiveRequest(request)){
+                Sleep(SERVER_TIMEOUT);
+                continue;
+            }
             // when get task request
             if(request.messegeType == Messege::TaskRequest){
                 // if still have sub-tasks
                 if(nextStart < TASK_ARRAY_SIZE){
                 // send next subtask
-                    Messege taskMsg(Messege::Task, processID(),(void*)array[nextStart], SUB_TASK_SIZE );
-                    // ToDo: send task
+                    cout << Time::timeStamp() << ": Sending sub-task to process " << request.senderId << endl;
+                    Messege taskMsg(Messege::Task, processID(),(void*)&array[nextStart], SUB_TASK_SIZE * sizeof(int));
+                    IPCManager::instance()->server_respondToRequest(request, taskMsg);
                 }
                 nextStart += SUB_TASK_SIZE;
             }
             // when get task result
             else if(request.messegeType == Messege::TaskResult){
                 // update result
+                int result = (int)request.userData();
+                if(result < minimumValue)
+                    minimumValue = result;
                 ++ accomplishedSubtasks;
             }
-            taskAccomplished = numberOfSubTasks == accomplishedSubtasks;
+            if(numberOfSubTasks == accomplishedSubtasks){
+                taskAccomplished = true;
+                cout << Time::timeStamp() << ": Task Accomplished, Result: " << minimumValue << endl;
+            }
         }
     }
     return 0;
 }
 
-DWORD WINAPI Process::keepSendingCoordinatorMessage(void *param)
+DWORD WINAPI BullyProcess::keepSendingCoordinatorMessage(void *param)
 {
     bool *keepSending = (bool*)param;
     while(*keepSending){
-        Messege msg(Messege::Coordinator, Process::processID());
+        Messege msg(Messege::Coordinator, BullyProcess::processID());
         IPCManager::instance()->broadcastMessage(msg);
 		Sleep(COORDINATOR_MSG_INTERVAL);
     }
     return 0;
 }
 
-DWORD WINAPI Process::sendSubTask(vector<int>::iterator start,
-                            vector<int>::iterator end)
-{
-    return 0;
-}
-
-Process* Process::m_instance = NULL;
+BullyProcess* BullyProcess::m_instance = NULL;

@@ -1,22 +1,17 @@
-#ifndef MESSEGE_H
-#define MESSEGE_H
+#pragma once
+
 #include "stdafx.h"
+#include "configurations.h"
 
 #include <vector>
 
-#define MSG_MAX_SIZE 1024
-#define MSG_STR_COORDINATOR "COORDINATOR"
-#define MSG_STR_ELECTION    "ELECTION"
-#define MSG_STR_ALIVE       "ALIVE"
-#define MSG_STR_UNKNOWN     "UNKNOWN"
-#define MSG_STR_TASK_REQUEST "TASK_REQUEST"
-#define MSG_STR_TASK_RESULT  "TASK_RESULT"
-#define MSG_STR_TASK        "TASK"
-
-#define ELECTION_TIMEOUT    1000
-#define COORDINATOR_TIMEOUT 3000
-#define COORDINATOR_MSG_INTERVAL 1000 
-#define SERVER_TIMEOUT 100
+#define MSG_STR_COORDINATOR     "COORDINATOR"
+#define MSG_STR_ELECTION        "ELECTION"
+#define MSG_STR_ALIVE           "ALIVE"
+#define MSG_STR_UNKNOWN         "UNKNOWN"
+#define MSG_STR_TASK_REQUEST    "TASK_REQUEST"
+#define MSG_STR_TASK_RESULT     "TASK_RESULT"
+#define MSG_STR_TASK            "TASK"
 
 class Messege
 {
@@ -33,23 +28,25 @@ public:
     };
     int senderId = 0;
     MessegeType messegeType = Unknown;
-    void* messegeData = NULL;
-    int messegeDataSize = 0;
     sockaddr_in senderAddress; // recieved sender address
+	SOCKET socket = NULL;
+
 
     Messege(){}
     ~Messege();
     // Constructs Messege by type, sender id, timeout and data
-    Messege(MessegeType type, int pid, void *data = NULL, int dataSize = 0);
+    Messege(MessegeType type, int pid = 0, void *data = NULL, int dataSize = 0);
     // composes message string
     std::string msgString();
+    std::vector<char> msgContent();
     // converts Messege type into string
     std::string typeString();
-
     bool fillMessege(char *buffer, int size);
+    void const *userData(){return (const void*) m_userData;}
+    int userDataSize() {return m_userDataSize;}
+
 private:
     void parseType(std::string strType);
+    void* m_userData = NULL;
+    int m_userDataSize = 0;
 };
-
-
-#endif // MESSEGE_H

@@ -1,5 +1,4 @@
-#ifndef ELEPSEDTIMER_H
-#define ELEPSEDTIMER_H
+#pragma once
 
 #include <sys\timeb.h>
 #include <string>
@@ -24,7 +23,7 @@ public:
         time_t     now = time(0);
         struct tm  tstruct;
         char       buf[9];
-        tstruct = *localtime(&now);
+        localtime_s(&tstruct, &now);
         strftime(buf, sizeof(buf), "%X", &tstruct);
 
         return std::string(buf);
@@ -33,5 +32,3 @@ public:
 private:
     struct timeb m_start;
 };
-
-#endif // ELEPSEDTIMER_H
