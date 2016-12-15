@@ -108,52 +108,37 @@ bool IPCManager::readBroadcastMessage(Messege &msg, int timeout)
 
 bool IPCManager::client_connectToServer(Messege coordinatorMsg)
 {
-	if (m_clientSocket != INVALID_SOCKET) { // check if already connected
-		return true;
-	}
-	std::cout << Time::timeStamp() << ": Connecting to server..." << endl;
-	int trials = 2;
-	bool error;
-	do {
-		error = false;
-		// Create a SOCKET for connecting to server
-		m_clientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-		if (m_clientSocket == INVALID_SOCKET) {
-			printf("socket failed with error: %ld\n", WSAGetLastError());
-			WSACleanup();
-			exit(EXIT_FAILURE);
-		}
-		// extract server IP address from coordination messege
+    // Create a SOCKET for connecting to server
+    m_clientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (m_clientSocket == INVALID_SOCKET) {
+        printf("socket failed with error: %ld\n", WSAGetLastError());
+        WSACleanup();
+        exit(EXIT_FAILURE);
+    }
+    // extract server IP address from coordination messege
 
-		sockaddr_in address;
-		address.sin_family = AF_INET;
-		address.sin_port = htons(TCP_PORT);
-		address.sin_addr.s_addr = coordinatorMsg.senderAddress.sin_addr.s_addr;
+    sockaddr_in address;
+    address.sin_family = AF_INET;
+    address.sin_port = htons(TCP_PORT);
+    address.sin_addr.s_addr = coordinatorMsg.senderAddress.sin_addr.s_addr;
 
-		// establishes a connection to the server/coordinator
-		int iResult;
-		iResult = connect(m_clientSocket, (SOCKADDR*)&address,
-			sizeof(address));
+    // establishes a connection to the server/coordinator
+    int res;
+    res = connect(m_clientSocket, (SOCKADDR*)&address,
+                      sizeof(address));
 
-		if (iResult == SOCKET_ERROR) {
-			error = true;
-			break;
-		}
-		if (error) {
-			client_disconnectServer();
-			-- trials;
-		}
-	} while (error && trials > 0);
-	if (error)
-		return false;
-	return true;
+    if (res == SOCKET_ERROR) {
+        closesocket(m_clientSocket);
+        m_clientSocket = INVALID_SOCKET;
+        return false;
+    }
+    return true;
 }
 
 void IPCManager::client_disconnectServer()
 {
     if(m_clientSocket == INVALID_SOCKET)
         return;
-    std::cout << Time::timeStamp() <<  ": Disconnecting from server..." << endl;
     // shutdown the connection
     int iResult = shutdown(m_clientSocket, SD_BOTH);
     if (iResult == SOCKET_ERROR) {
@@ -163,7 +148,7 @@ void IPCManager::client_disconnectServer()
     m_clientSocket = INVALID_SOCKET;
 }
 
-bool IPCManager::server_receiveRequest(Messege &request, int timeout)
+bool IPCManager::server_sendTask(Messege &task, int timeout)
 {
     if(m_serverSocket == INVALID_SOCKET){
 		return false;
@@ -176,21 +161,30 @@ bool IPCManager::server_receiveRequest(Messege &request, int timeout)
         return false;
     }
 
-    // set timeout
-    if(setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO,(char*)&timeout,sizeof(timeout))){
-        cout << "could not set socket option!" <<endl;
+    // send task
+    int res = send(clientSocket, task.msgContent().data(), task.msgContent().size(), 0);
+    if (res <= 0) {
+        printf("send failed with error: %d\n", WSAGetLastError());
+        closesocket(clientSocket);
         return false;
     }
 
-    // recieve request
-    char recvbuf[MSG_MAX_SIZE];
-    int res = recv(clientSocket, recvbuf, MSG_MAX_SIZE, 0);
-    if (res <= 0) {
-        //closesocket(clientSocket);
+    // set timeout
+    if(setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO,(char*)&timeout,sizeof(timeout))){
+        cout << "could not set socket option!" <<endl;
+        closesocket(clientSocket);
         return false;
     }
-    request.fillMessege(recvbuf, res);
-    request.socket = clientSocket;
+
+    // recieve result
+    char recvbuf[MSG_MAX_SIZE];
+    res = recv(clientSocket, recvbuf, MSG_MAX_SIZE, 0);
+    if (res <= 0) {
+        closesocket(clientSocket);
+        return false;
+    }
+    task.fillMessege(recvbuf, res);
+    closesocket(clientSocket);
     return true;
 }
 
@@ -265,43 +259,34 @@ void IPCManager::server_closeTcpServer()
     m_serverSocket = INVALID_SOCKET;
 }
 
-bool IPCManager::server_respondToRequest(Messege &request, Messege &response)
-{
-    if(request.socket == INVALID_SOCKET)
-        return false;
-    int iResult = send(request.socket, response.msgContent().data(), response.msgContent().size(), 0);
-    //closesocket(request.socket);
-    request.socket = INVALID_SOCKET;
-    if (iResult <= 0) {
-        printf("send failed with error: %d\n", WSAGetLastError());
-        return false;
-    }
-    return true;
-}
-
-bool IPCManager::client_sendRequest(Messege &requestResponse, bool waitForResponse, int timeout)
+bool IPCManager::client_getTask(Messege &task, int timeout)
 {
     if(m_clientSocket == INVALID_SOCKET)
         return false;
-    int res = send( m_clientSocket, requestResponse.msgContent().data(), requestResponse.msgContent().size(), 0 );
-    if (res == SOCKET_ERROR) {
-        printf("send failed with error: %d\n", WSAGetLastError());
+
+    // set timeout
+    if(setsockopt(m_clientSocket, SOL_SOCKET, SO_RCVTIMEO,(char*)&timeout,sizeof(timeout))){
+        cout << "could not set socket option!" <<endl;
         return false;
     }
-    if(waitForResponse){
 
-        // set timeout
-        if(setsockopt(m_clientSocket, SOL_SOCKET, SO_RCVTIMEO,(char*)&timeout,sizeof(timeout))){
-            cout << "could not set socket option!" <<endl;
-            return false;
-        }
+    char recvbuf[MSG_MAX_SIZE];
+    int res = recv(m_clientSocket, recvbuf, MSG_MAX_SIZE, 0);
+    if ( res <= 0){
+        return false;
+    }
+    task.fillMessege(recvbuf, res);
+    return true;
+}
 
-        char recvbuf[MSG_MAX_SIZE];
-        res = recv(m_clientSocket, recvbuf, MSG_MAX_SIZE, 0);
-        if ( res <= 0){
-            return false;
-        }
-        requestResponse.fillMessege(recvbuf, res);
+bool IPCManager::client_sendResult(Messege &task)
+{
+    if(m_clientSocket == INVALID_SOCKET)
+        return false;
+
+    int res = send(m_clientSocket, task.msgContent().data(), task.msgContent().size(), 0);
+    if ( res <= 0){
+        return false;
     }
     return true;
 }

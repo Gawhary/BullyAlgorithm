@@ -49,9 +49,7 @@ bool BullyProcess::electMe()
 			if (!somethingReceived)
 				return true;
 		} while (msg.senderId == m_processId); // skip message broadcasted by me
-        if((msg.messegeType == Messege::Coordinator ||
-            msg.messegeType == Messege::Election)
-                && msg.senderId > m_processId){
+        if( msg.senderId > m_processId){
             // toDo: save new higher process and create connection
             return false;
         }
@@ -77,28 +75,29 @@ void BullyProcess::beWorker()
         }
     }
     cout << "Coordinator lost." << endl;
-    m_ipcManager->client_disconnectServer();
 }
 
 void BullyProcess::doSubTask(Messege &coordinatorMsg){
-    // connect iff not connected
-    if(m_ipcManager->client_connectToServer(coordinatorMsg)){
-        Messege task(Messege::TaskRequest);
-        bool gotTask = m_ipcManager->client_sendRequest(task, true, SERVER_TIMEOUT);
-        if(gotTask){
-            cout << Time::timeStamp() << ": Task recieved." << endl;
-            // do the task
-            int minValue = INT_MAX;
-            int* values = (int*)task.userData();
-            for(int i = 0; i < task.userDataSize(); i+= sizeof(int) )
-                if(values[i] < minValue)
-                    minValue = values[i];
-            // return the result
-            cout << Time::timeStamp() << ": Sending result:" << minValue << endl;
-            Messege resultMsg(Messege::TaskResult, m_processId, (void*)minValue, sizeof(minValue));
-            m_ipcManager->client_sendRequest(resultMsg);
-        }
+    Messege task(Messege::TaskRequest, m_processId);
+	if (!m_ipcManager->client_connectToServer(coordinatorMsg))
+		return;
+    bool gotTask = m_ipcManager->client_getTask(task, SERVER_TIMEOUT);
+    if(gotTask){
+        cout << Time::timeStamp() << ": Task recieved." << endl;
+        // do the task
+        int minValue = INT_MAX;
+        int* values = (int*)task.userData();
+        int size = task.userDataSize() / sizeof(int);
+        for(int i = 0; i < size; i++ )
+            if(values[i] < minValue)
+                minValue = values[i];
+        // return the result
+        cout << Time::timeStamp() << ": Sending result:" << minValue << endl;
+        Messege resultMsg(Messege::TaskResult, m_processId, (void*)minValue, sizeof(minValue));
+
+        m_ipcManager->client_sendResult(resultMsg);
     }
+    m_ipcManager->client_disconnectServer();
 }
 
 int BullyProcess::processID(){
@@ -143,18 +142,17 @@ bool BullyProcess::gotBully()
         Messege msg;
         bool somethingReceived = m_ipcManager->readBroadcastMessage(msg, ELECTION_TIMEOUT);
         if(!somethingReceived) //timeout
-            return false;
-        if(msg.messegeType == Messege::Election ||
-			msg.messegeType == Messege::Coordinator){
-            if( msg.senderId > m_processId){
-                // toDo: save new higher process and create a connection
-                return true;
-            }
-            else{
-                // ToDo: send alive message only to the sender
-                m_ipcManager->broadcastMessage(Messege(Messege::Alive,m_processId));
-            }
+            return false;        
+        if( msg.senderId > m_processId){
+            // toDo: save new higher process and create a connection
+            return true;
         }
+        else
+			if (msg.messegeType == Messege::Election) {
+            // ToDo: send alive message only to the sender
+            m_ipcManager->broadcastMessage(Messege(Messege::Alive,m_processId));
+        }
+        
     }
 }
 
@@ -164,7 +162,7 @@ DWORD WINAPI BullyProcess::taskDistributionTread(void* param)
     bool taskAccomplished ;
     int numberOfSubTasks = (TASK_ARRAY_SIZE / SUB_TASK_SIZE);
     int array[TASK_ARRAY_SIZE];
-    Messege request;
+    Messege resultMsg;
     while(*keepAlive){
         // Create new task
         cout << Time::timeStamp() << ": Creating new task..." << endl;
@@ -175,34 +173,30 @@ DWORD WINAPI BullyProcess::taskDistributionTread(void* param)
         int nextStart = 0;
         int accomplishedSubtasks = 0;
         while(*keepAlive && !taskAccomplished){
-            // wait for worker request
-            if(!IPCManager::instance()->server_receiveRequest(request)){
-                Sleep(SERVER_TIMEOUT);
-                continue;
-            }
-            // when get task request
-            if(request.messegeType == Messege::TaskRequest){
-                // if still have sub-tasks
-                if(nextStart < TASK_ARRAY_SIZE){
-                // send next subtask
-                    cout << Time::timeStamp() << ": Sending sub-task to process " << request.senderId << endl;
-                    Messege taskMsg(Messege::Task, processID(),(void*)&array[nextStart], SUB_TASK_SIZE * sizeof(int));
-                    IPCManager::instance()->server_respondToRequest(request, taskMsg);
+            // if still have sub-tasks
+            if(nextStart < TASK_ARRAY_SIZE){
+                // prepare sub-task
+                Messege taskMsg(Messege::Task, processID(),(void*)&array[nextStart], SUB_TASK_SIZE * sizeof(int));
+                // ToDo: fork
+                // wait for worker request and send next subtask
+                if(!IPCManager::instance()->server_sendTask(taskMsg, TASK_TIMEOUT)){
+                    Sleep(SERVER_TIMEOUT);
+                    continue;
                 }
-                nextStart += SUB_TASK_SIZE;
-            }
-            // when get task result
-            else if(request.messegeType == Messege::TaskResult){
                 // update result
-                int result = (int)request.userData();
+                int result = (int)taskMsg.userData();
+                cout << Time::timeStamp() << ": Sub-task sent, Result: " << result << endl;
                 if(result < minimumValue)
                     minimumValue = result;
+
+                // set next task
+                nextStart += SUB_TASK_SIZE;
                 ++ accomplishedSubtasks;
             }
-            if(numberOfSubTasks == accomplishedSubtasks){
-                taskAccomplished = true;
-                cout << Time::timeStamp() << ": Task Accomplished, Result: " << minimumValue << endl;
-            }
+        }
+        if(numberOfSubTasks == accomplishedSubtasks){
+            taskAccomplished = true;
+            cout << Time::timeStamp() << ": Task Accomplished, Result: " << minimumValue << endl;
         }
     }
     return 0;

@@ -4,6 +4,7 @@
 TEMPLATE = app
 TARGET = BullyProcess
 INCLUDEPATH += .
+CONFIG += console
 
 # Input
 HEADERS += stdafx.h targetver.h \

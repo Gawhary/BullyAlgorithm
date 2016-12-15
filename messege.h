@@ -29,8 +29,6 @@ public:
     int senderId = 0;
     MessegeType messegeType = Unknown;
     sockaddr_in senderAddress; // recieved sender address
-	SOCKET socket = NULL;
-
 
     Messege(){}
     ~Messege();

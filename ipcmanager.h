@@ -17,13 +17,12 @@ public:
     void broadcastMessage(Messege &messege); // used for sending Election, Coordinator, and Alive messeges
     bool readBroadcastMessage(Messege &msg, int timeout = 0); // receive messeges broadcast from other processes
 
-    bool server_receiveRequest(Messege &request, int timeout = 0); // reads a request sent by slave process
-    bool server_respondToRequest(Messege &request, Messege &response); // takes the socket from response and send back it's content
+    bool server_sendTask(Messege &request, int timeout = 0); // reads a request sent by slave process, send task and recieve result
     bool server_startTcpServer(); // initialize TCP server
     void server_closeTcpServer();// stop listening for task requests
 
-
-    bool client_sendRequest(_Inout_ Messege &requestResponse, bool waitForResponse = false, int timeout = 0); // send task result and optionally wait for responce
+    bool client_getTask( Messege &task, int timeout = 0); // get task from server
+    bool client_sendResult(Messege &task); // send task result
     bool client_connectToServer(Messege coordinatorMsg); // called by worker once when enter slave mode
     void client_disconnectServer(); // called by worker before exit slave mode
 
